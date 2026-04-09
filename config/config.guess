@@ -864,9 +864,9 @@ main ()
   long fms;
   int family, model;
   const char *modelstr;
-  int cpu_64bit = 0, cpu_avx = 0;
+  int cpu_64bit = 0, cpu_avx = 0, cpu_avx512 = 0;
   int cpu_avx_fma = 0, cpu_avx512f_avx512dq = 0;
-  int cpuid_64bit, cpuid_avx, cpuid_osxsave;
+  int cpuid_64bit, cpuid_avx, cpuid_avx512f, cpuid_osxsave;
 
   CPUID (vendor_string, 0);
   vendor_string[12] = 0;
@@ -1061,12 +1061,12 @@ main ()
               break;
             case 0x10:
             default:
-              modelstr = "zen4";
+              cpu_avx512 = 1, modelstr = "zen4";
               break;
           }
           break;
         case 26:                /* Zen 5 */
-          cpu_64bit = 1, cpu_avx = 1, modelstr = "zen5";
+          cpu_64bit = 1, cpu_avx = 1, cpu_avx512 = 1, modelstr = "zen5";
           break;
       }
   }
@@ -1094,11 +1094,19 @@ main ()
   CPUID (feature_string, 0x80000001);
   cpuid_64bit = (feature_string[7] >> 5) & 1;
 
+  CPUID (feature_string, 7);
+  cpuid_avx512f = feature_string[2] & 1;
+
   if (cpuid_64bit && ! cpu_64bit)
     /* If our cpuid-based CPU identification thinks this is a 32-bit CPU but
        cpuid claims AMD64 capabilities, then revert to the generic "x86_64".
        This is of course wrong, but it can happen in some virtualisers and
        emulators, and this workaround allows for successful 64-bit builds.  */
+    modelstr = "x86_64";
+  else if ((cpu_avx && ! (cpuid_avx && cpuid_osxsave))
+    || (cpu_avx512 && ! (cpuid_avx512f && cpuid_osxsave)))
+    /* For CPUs nominally capable of executing AVX/AVX-512, set modelstr to "x86_64"
+       when not both the AVX/AVX-512 and OSXSAVE cpuid bits are set.
     modelstr = "x86_64";
 
   printf("%s", modelstr);
